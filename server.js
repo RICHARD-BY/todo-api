@@ -1,57 +1,78 @@
 const express = require('express');
+const mongoose = require('mongoose');
+const Task = require('./models/task');
+
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
 
 app.use(express.json());
 
+mongoose.connect('mongodb://localhost:27017/todo-api',{
+    useNewUrlParser:true,   
+    useUnifiedTopology:true
+})
+.then(()=> console.log('Connected to MongoDB'))
+.catch(err=> console.error('Could not connect to MongoDB',err));
 
-let tasks = [
-    { id: 1, title: 'Buy groceries', completed: false },
-    { id: 2, title: 'Study Node.js', completed: false },
-];
 
+app.get('/tasks',async(req,res) => {
+    try{
+        const tasks = await Task.find();
+        res.json(tasks);
+    }catch(error){
+        res.status(500).json({message:error.message});
+    }
+});
 
-app.get('/tasks', (req, res) => {
-    res.json(tasks);
+app.get('/tasks/:id', async (req, res) => {
+    try {
+        const task = await Task.findById(req.params.id); // Find task by ID
+        if (!task) return res.status(404).json({ message: 'Task not found' }); // 404 if not found
+        res.json(task); // Return the task
+    } catch (error) {
+        res.status(500).json({ message: error.message }); // Handle any server errors
+    }
 });
 
 
-app.get('/tasks/:id', (req, res) => {
-    const task = tasks.find(t => t.id === parseInt(req.params.id));
-    if (!task) return res.status(404).send('Task not found');
-    res.json(task);
-});
 
-
-app.post('/tasks', (req, res) => {
-    const newTask = {
-        id: tasks.length + 1,
+app.post('/tasks', async (req, res) => {
+    const task = new Task({
         title: req.body.title,
         completed: req.body.completed || false
-    };
-    tasks.push(newTask);
-    res.status(201).json(newTask);
+    });
+
+    try {
+        const newTask = await task.save();
+        res.status(201).json(newTask);
+    } catch (error) {
+        res.status(400).json({message: error.message});
+    }
 });
 
+app.put('/tasks/:id',async (req,res) => {
+    try{
+        const task=await Task.findByIdAndUpdate(req.params.id,{
+            title:req.body.title,
+            completed:req.body.completed
+        },{new:true});
 
-app.put('/tasks/:id', (req, res) => {
-    const task = tasks.find(t => t.id === parseInt(req.params.id));
-    if (!task) return res.status(404).send('Task not found');
-    
-    task.title = req.body.title || task.title;
-    task.completed = req.body.completed !== undefined ? req.body.completed : task.completed;
-    
-    res.json(task);
+        if(!task) return res.status(404).json({message: 'Task not found'});
+        res.json(task);
+    }catch (err){
+        res.status(400).json({message: error.message});
+    }
 });
 
-
-app.delete('/tasks/:id', (req, res) => {
-    const taskIndex = tasks.findIndex(t => t.id === parseInt(req.params.id));
-    if (taskIndex === -1) return res.status(404).send('Task not found');
-    
-    tasks.splice(taskIndex, 1);
-    res.status(204).send();
+app.delete('tasks/:id',async (req,res) => {
+    try{
+        const task = await Task.findByIdAndDelete(req.params.id);
+        if(!task) return res.status(404).json({message:'Task not found'});
+        res.status(204).send();
+    } catch (error) {
+        res.status(500).json({message:error.message});
+    }
 });
 
 
